@@ -359,6 +359,73 @@
       font-size: 11px;
     }
 
+    /* 模态框样式 */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-content {
+      background-color: #fff;
+      margin: 5% auto;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+      width: 80%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow: auto;
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .close-button {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-sub);
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .close-button:hover {
+      color: var(--text-main);
+      background: rgba(148, 163, 184, 0.15);
+      border-radius: 50%;
+    }
+
+    .modal-textarea {
+      width: 100%;
+      min-height: 400px;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
     @media (max-width: 900px) {
       body {
         padding: 10px;
@@ -367,6 +434,10 @@
         box-shadow:
           0 6px 14px rgba(15, 23, 42, 0.06),
           0 0 0 1px rgba(148, 163, 184, 0.1);
+      }
+      .modal-content {
+        width: 95%;
+        margin: 10% auto;
       }
     }
   </style>
@@ -430,6 +501,11 @@
 
     <label>（可选）手动填写参考答案文本（不为空则跳过参考图片 OCR）</label>
     <textarea id="referenceTextManual" placeholder="也可以直接把整份参考答案文本粘贴到这里"></textarea>
+
+    <div style="margin-top: 8px; display:flex; flex-wrap:wrap; gap:6px;">
+      <button id="showReferenceTextButton" class="secondary small">查看识别的总参考答案</button>
+      <button id="saveReferenceTextButton" class="secondary small">保存参考答案文本</button>
+    </div>
 
     <label style="margin-top: 8px;">
       <input id="enableAlign" type="checkbox" checked>
@@ -516,6 +592,21 @@
   </div>
 </div>
 
+<!-- 参考答案文本模态框 -->
+<div id="referenceTextModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>识别的总参考答案文本</h2>
+      <button class="close-button">&times;</button>
+    </div>
+    <textarea id="referenceTextDisplay" class="modal-textarea" readonly></textarea>
+    <div style="margin-top: 12px; display:flex; justify-content: flex-end; gap: 6px;">
+      <button id="copyReferenceTextButton" class="secondary small">复制文本</button>
+      <button id="closeReferenceTextModal" class="primary small">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ===== 题目区域与黑块参考位置 =====
   const QUESTION_AREAS = [
@@ -557,6 +648,10 @@
   const jsonFileInput = document.getElementById('jsonFileInput');
   const saveSettingsButton = document.getElementById('saveSettingsButton');
   const clearSettingsButton = document.getElementById('clearSettingsButton');
+  
+  // 新增按钮
+  const showReferenceTextButton = document.getElementById('showReferenceTextButton');
+  const saveReferenceTextButton = document.getElementById('saveReferenceTextButton');
 
   const logDiv = document.getElementById('log');
   const answerCanvas = document.getElementById('answerCanvas');
@@ -576,6 +671,13 @@
   const twoStepConfig = document.getElementById('twoStepConfig');
   const singleVlConfig = document.getElementById('singleVlConfig');
 
+  // 模态框相关元素
+  const referenceTextModal = document.getElementById('referenceTextModal');
+  const referenceTextDisplay = document.getElementById('referenceTextDisplay');
+  const copyReferenceTextButton = document.getElementById('copyReferenceTextButton');
+  const closeReferenceTextModal = document.getElementById('closeReferenceTextModal');
+  const modalCloseButton = document.querySelector('#referenceTextModal .close-button');
+
   // ===== 全局状态 =====
   let answerSheetOriginalDataUrl = null;
   let answerSheetAlignedDataUrl = null;
@@ -585,6 +687,7 @@
   let currentQuestionList = [];
   let selectedRowElement = null;
   let gradedSheetDataUrl = null;
+  let currentReferenceText = ''; // 保存当前识别的总参考答案
 
   // ===== 工具函数 =====
   function log(msg) {
@@ -683,6 +786,57 @@
     
     referenceImageInput.files = dt.files;
     updateReferenceFileList();
+  }
+
+  // 显示参考答案文本模态框
+  function showReferenceTextModal() {
+    if (!currentReferenceText) {
+      alert('当前没有识别的参考答案文本。请先完成批阅或加载已有结果。');
+      return;
+    }
+    
+    referenceTextDisplay.value = currentReferenceText;
+    referenceTextModal.style.display = 'block';
+  }
+
+  // 关闭模态框
+  function closeModal() {
+    referenceTextModal.style.display = 'none';
+  }
+
+  // 复制参考答案文本
+  function copyReferenceText() {
+    referenceTextDisplay.select();
+    document.execCommand('copy');
+    
+    // 显示复制成功提示
+    const originalText = copyReferenceTextButton.textContent;
+    copyReferenceTextButton.textContent = '已复制!';
+    setTimeout(() => {
+      copyReferenceTextButton.textContent = originalText;
+    }, 2000);
+  }
+
+  // 保存参考答案文本到本地文件
+  function saveReferenceText() {
+    if (!currentReferenceText) {
+      alert('当前没有识别的参考答案文本。请先完成批阅或加载已有结果。');
+      return;
+    }
+    
+    const ts = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15);
+    const filename = `reference_text_${ts}.txt`;
+    const blob = new Blob([currentReferenceText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    
+    log('已保存参考答案文本到本地文件。');
   }
 
   // 简单黑块检测
@@ -1070,6 +1224,10 @@ ${referenceText}
           referenceImageDataUrls.push(dataUrl);
         }
       }
+      
+      // 保存识别的总参考答案文本到全局变量
+      currentReferenceText = referenceText;
+      
       log('参考答案抽取完成（仅展示前 120 字）：\n' + referenceText.slice(0, 120) + (referenceText.length > 120 ? '…' : ''));
 
       const allItems = [];
@@ -1404,6 +1562,10 @@ ${referenceText}
   // 从 JSON 对象加载结果
   function loadGradingResultFromObject(obj) {
     gradingResult = obj;
+    // 从JSON中恢复参考答案文本
+    if (obj.reference && obj.reference.text) {
+      currentReferenceText = obj.reference.text;
+    }
     renderGradingResult(obj);
     downloadJsonButton.disabled = false;
     generateGradedAnswerSheetImage();
@@ -1499,6 +1661,22 @@ ${referenceText}
   downloadJsonButton.addEventListener('click', downloadJson);
   downloadGradedSheetButton.addEventListener('click', downloadGradedSheet);
   downloadTemplatePdfButton.addEventListener('click', downloadPresetTemplatePdf);
+
+  // 新增按钮事件
+  showReferenceTextButton.addEventListener('click', showReferenceTextModal);
+  saveReferenceTextButton.addEventListener('click', saveReferenceText);
+
+  // 模态框事件
+  modalCloseButton.addEventListener('click', closeModal);
+  closeReferenceTextModal.addEventListener('click', closeModal);
+  copyReferenceTextButton.addEventListener('click', copyReferenceText);
+
+  // 点击模态框外部关闭
+  window.addEventListener('click', (event) => {
+    if (event.target === referenceTextModal) {
+      closeModal();
+    }
+  });
 
   jsonFileInput.addEventListener('change', () => {
     const file = jsonFileInput.files[0];
