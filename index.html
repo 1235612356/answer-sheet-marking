@@ -276,6 +276,15 @@
       background: #dbeafe !important;
     }
 
+    tfoot tr {
+      background: #eff6ff !important;
+      font-weight: 600;
+    }
+
+    tfoot tr td {
+      border-top: 2px solid #3b82f6;
+    }
+
     #selectedAreaImage {
       max-width: 100%;
       border-radius: 6px;
@@ -464,6 +473,14 @@
         </tr>
         </thead>
         <tbody id="questionTableBody"></tbody>
+        <tfoot id="questionTableFooter" style="display: none;">
+          <tr>
+            <td colspan="2" style="text-align: right; font-weight: 600;">总分：</td>
+            <td id="totalScore" style="font-weight: 600; color: #dc2626;"></td>
+            <td id="totalMaxScore" style="font-weight: 600;"></td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
@@ -526,6 +543,9 @@
   const gradedSheetPreview = document.getElementById('gradedSheetPreview');
 
   const questionTableBody = document.getElementById('questionTableBody');
+  const questionTableFooter = document.getElementById('questionTableFooter');
+  const totalScoreCell = document.getElementById('totalScore');
+  const totalMaxScoreCell = document.getElementById('totalMaxScore');
   const summaryInfo = document.getElementById('summaryInfo');
   const selectedQuestionInfo = document.getElementById('selectedQuestionInfo');
   const selectedAreaImage = document.getElementById('selectedAreaImage');
@@ -749,7 +769,7 @@
 请根据下面的参考答案和学生作答，对本答题区域中的所有题目逐题评分。
 
 要求：
-1. 先从学生作答中识别所有出现的题号（例如“1.”、“(1)”、“第3题”等），并将它们和对应作答内容关联。
+1. 先从学生作答中识别所有出现的题号（例如"1."、"(1)"、"第3题"等），并将它们和对应作答内容关联。
 2. 再根据参考答案，为每个题号单独给出得分。
    - 若参考答案中能看出该题满分，则按参考答案给出的满分评分。
    - 若参考答案中未给出该题的满分，则默认该题满分为 10 分。
@@ -805,7 +825,7 @@ ${answerText}
 你将看到一张答题区域的图片（学生作答），以及整份试卷的参考答案文本。
 
 要求：
-1. 从图像中识别出所有题号（例如“1.”、“(1)”、“第3题”等）及对应作答。
+1. 从图像中识别出所有题号（例如"1."、"(1)"、"第3题"等）及对应作答。
 2. 根据后面提供的参考答案，对每个题号单独给出得分。
    - 若参考答案中能看出该题满分，则按参考答案给出的满分评分。
    - 若参考答案中未给出该题的满分，则默认该题满分为 10 分。
@@ -875,6 +895,7 @@ ${referenceText}
       gradedSheetDataUrl = null;
       currentQuestionList = [];
       questionTableBody.innerHTML = '';
+      questionTableFooter.style.display = 'none';
       summaryInfo.textContent = '';
       selectedQuestionInfo.textContent = '点击上表某一行查看对应答题区域；如题号重复，每一条记录会分别显示。';
       selectedAreaImage.src = '';
@@ -907,13 +928,13 @@ ${referenceText}
         answerOcrModel = answerOcrModelInput.value.trim();
         textGradingModel = textGradingModelInput.value.trim();
         if (!answerOcrModel || !textGradingModel) {
-          alert('两阶段模式下，请填写“答题区域 OCR 模型”和“批阅模型（文本）”。');
+          alert('两阶段模式下，请填写"答题区域 OCR 模型"和"批阅模型（文本）"。');
           return;
         }
       } else {
         vlGradingModel = vlGradingModelInput.value.trim();
         if (!vlGradingModel) {
-          alert('单一 VL 模式下，请填写“批阅模型（VL）”。');
+          alert('单一 VL 模式下，请填写"批阅模型（VL）"。');
           return;
         }
       }
@@ -1008,6 +1029,7 @@ ${referenceText}
       }
 
       const totalScore = allItems.reduce((s, it) => s + (isNaN(it.score) ? 0 : it.score), 0);
+      const totalMaxScore = allItems.reduce((s, it) => s + (isNaN(it.max_score) ? 0 : it.max_score), 0);
 
       gradingResult = {
         created_at: new Date().toISOString(),
@@ -1031,7 +1053,8 @@ ${referenceText}
         grading: {
           items: allItems,
           area_summaries: areaSummaries,
-          total_score: totalScore
+          total_score: totalScore,
+          total_max_score: totalMaxScore
         }
       };
 
@@ -1125,6 +1148,27 @@ ${referenceText}
         }
       }
 
+      // 在图片右上角添加总分显示（红色大字）
+      const totalScore = gradingResult.grading.total_score || 0;
+      const totalMaxScore = gradingResult.grading.total_max_score || 0;
+      
+      ctx.font = 'bold 60px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI"';
+      ctx.fillStyle = '#dc2626'; // 红色
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      
+      const totalText = `总分: ${totalScore}`;
+      const textWidth = ctx.measureText(totalText).width;
+      const padding = 20;
+      
+      // 添加白色背景
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(c.width - textWidth - padding * 2, padding, textWidth + padding * 2, 80);
+      
+      // 绘制红色总分文字
+      ctx.fillStyle = '#dc2626';
+      ctx.fillText(totalText, c.width - padding, padding + 10);
+
       gradedSheetDataUrl = c.toDataURL('image/jpeg', 0.9);
       if (gradedSheetPreview) gradedSheetPreview.src = gradedSheetDataUrl;
       downloadGradedSheetButton.disabled = !gradedSheetDataUrl;
@@ -1140,6 +1184,7 @@ ${referenceText}
     const items = (result.grading && result.grading.items) || [];
     const areas = (result.answer_sheet && result.answer_sheet.areas) || [];
     const totalScore = result.grading.total_score || 0;
+    const totalMaxScore = result.grading.total_max_score || 0;
 
     const sorted = [...items].sort((a, b) => {
       const na = parseInt(a.question_number, 10);
@@ -1174,6 +1219,11 @@ ${referenceText}
       tr.addEventListener('click', () => onQuestionRowClick(tr, item, areas));
       questionTableBody.appendChild(tr);
     });
+
+    // 显示总分行
+    questionTableFooter.style.display = '';
+    totalScoreCell.textContent = totalScore.toFixed(2);
+    totalMaxScoreCell.textContent = totalMaxScore.toFixed(2);
 
     summaryInfo.textContent =
       `共 ${sorted.length} 条评分记录，总分（简单累加）：${totalScore.toFixed(2)}。若题号重复，每一条记录都会单独显示，不做合并。`;
