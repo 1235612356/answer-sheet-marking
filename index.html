@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>答题卡自动批阅（前端版）</title>
+  <style>
+    :root {
+      --bg: #f4f5fb;
+      --card-bg: #ffffff;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --danger: #dc2626;
+      --accent: #22c55e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #e0f2fe 0, #f4f5fb 40%, #f4f5fb 100%);
+      color: var(--text-main);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 22px;
+      font-weight: 600;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    h1 span.sub {
+      font-size: 13px;
+      color: var(--text-sub);
+      font-weight: 400;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 14px 16px 16px;
+      box-shadow:
+        0 12px 30px rgba(15, 23, 42, 0.06),
+        0 0 0 1px rgba(148, 163, 184, 0.15);
+      flex: 1 1 340px;
+      min-width: 320px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .panel-header h2 {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      margin: 6px 0 2px;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+      background-color: #f9fafb;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+      background-color: #ffffff;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    input[type="file"] {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    button {
+      margin-top: 8px;
+      margin-right: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: var(--primary);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background-color 0.15s, box-shadow 0.15s, transform 0.05s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+      box-shadow: 0 5px 14px rgba(37, 99, 235, 0.3);
+      transform: translateY(-0.5px);
+    }
+
+    button.secondary {
+      background: #ffffff;
+      border-color: var(--border);
+      color: var(--text-main);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #f8fafc;
+      border-color: #cbd5f5;
+      box-shadow: 0 3px 10px rgba(148, 163, 184, 0.25);
+    }
+
+    button.ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-sub);
+      padding-left: 2px;
+      padding-right: 2px;
+    }
+
+    button.ghost:hover:not(:disabled) {
+      color: var(--text-main);
+      background: rgba(148, 163, 184, 0.15);
+    }
+
+    button.small {
+      font-size: 12px;
+      padding: 4px 9px;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: #fff;
+    }
+
+    button.danger:hover:not(:disabled) {
+      background: #fef2f2;
+      border-color: #b91c1c;
+      color: #b91c1c;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+
+    #log {
+      font-family: Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 190px;
+      overflow: auto;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #0f172a;
+    }
+
+    #log::-webkit-scrollbar {
+      width: 7px;
+    }
+    #log::-webkit-scrollbar-thumb {
+      background: #4b5563;
+      border-radius: 10px;
+    }
+
+    #answerSheetContainer {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #answerCanvas,
+    #overlayCanvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #overlayCanvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 5px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 600;
+      color: #334155;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #f9fafb;
+    }
+
+    tbody tr:hover {
+      background: #e0f2fe;
+      cursor: pointer;
+    }
+
+    tr.selected {
+      background: #dbeafe !important;
+    }
+
+    #selectedAreaImage {
+      max-width: 100%;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      color: var(--text-sub);
+      gap: 4px;
+    }
+
+    .tag.dot::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .config-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .config-row > div {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    #gradedSheetPreview {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-top: 4px;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 10px;
+      }
+      .panel {
+        box-shadow:
+          0 6px 14px rgba(15, 23, 42, 0.06),
+          0 0 0 1px rgba(148, 163, 184, 0.1);
+      }
+    }
+  </style>
+</head>
+<body>
+<h1>
+  答题卡自动批阅
+  <span class="sub">前端单页版 · 支持 VL & 文本模型组合 · JSON 存档与重放</span>
+</h1>
+
+<div class="container">
+  <!-- 配置面板 -->
+  <div class="panel" style="max-width: 440px;">
+    <div class="panel-header">
+      <h2>1. 接口 & 模型配置</h2>
+      <div class="config-row">
+        <button id="saveSettingsButton" class="ghost small">保存设置</button>
+        <button id="clearSettingsButton" class="ghost small">清除</button>
+      </div>
+    </div>
+
+    <label>API Base URL（OpenAI 兼容接口）</label>
+    <input id="apiBaseUrl" type="text"
+           placeholder="例如：https://dashscope.aliyuncs.com/compatible-mode/v1" />
+
+    <label>API Key（保存在浏览器本地，仅本机可见）</label>
+    <input id="apiKey" type="password" placeholder="在此填写你的 API Key" />
+
+    <label>参考答案 OCR 模型（VL）</label>
+    <input id="referenceOcrModel" type="text" placeholder="例如：qwen-vl-ocr-latest" />
+
+    <h2 style="margin-top:14px;">2. 批阅模式</h2>
+
+    <label>
+      <input type="radio" name="mode" value="two-step" checked>
+      两阶段：VL OCR 提取文字 + 文本模型批阅
+    </label>
+    <div id="twoStepConfig" style="margin-left: 16px; margin-bottom: 4px;">
+      <label>答题区域 OCR 模型（VL）</label>
+      <input id="answerOcrModel" type="text" placeholder="例如：qwen-vl-ocr-latest" />
+      <label>批阅模型（文本）</label>
+      <input id="textGradingModel" type="text" placeholder="例如：deepseek-v3.1" />
+    </div>
+
+    <label>
+      <input type="radio" name="mode" value="single-vl">
+      单一 VL 模型看图批阅（图像 + 参考答案文字）
+    </label>
+    <div id="singleVlConfig" style="margin-left: 16px; display:none; margin-bottom: 4px;">
+      <label>批阅模型（VL）</label>
+      <input id="vlGradingModel" type="text" placeholder="例如：qwen2.5-vl-max 或 gpt-4o" />
+    </div>
+
+    <h2 style="margin-top:14px;">3. 图片上传</h2>
+    <label>学生答题卡图片</label>
+    <input id="answerImageInput" type="file" accept="image/*" />
+
+    <label>参考答案图片</label>
+    <input id="referenceImageInput" type="file" accept="image/*" />
+
+    <label>（可选）手动填写参考答案文本（不为空则跳过参考图片 OCR）</label>
+    <textarea id="referenceTextManual" placeholder="也可以直接把整份参考答案文本粘贴到这里"></textarea>
+
+    <label style="margin-top: 8px;">
+      <input id="enableAlign" type="checkbox" checked>
+      启用右上角黑块自动对齐
+    </label>
+
+    <div style="margin-top: 12px; display:flex; flex-wrap:wrap; gap:6px;">
+      <button id="startButton" class="primary">开始批阅</button>
+      <button id="downloadJsonButton" class="secondary" disabled>下载 JSON 结果</button>
+      <button id="downloadGradedSheetButton" class="secondary" disabled>下载批阅后答题卡</button>
+      <button id="downloadTemplatePdfButton" class="secondary">下载标准答题卡（PDF）</button>
+    </div>
+
+    <h2 style="margin-top:16px;">4. 加载已有 JSON 结果</h2>
+    <label>从本地文件加载 JSON 结果</label>
+    <input id="jsonFileInput" type="file" accept="application/json" />
+    <div class="small" style="margin-top:4px;">
+      也可将 JSON 放在同一目录，通过链接参数 <code>?file=xxx.json</code> 打开页面<br/>
+      例如：<code>index.html?file=grading_result_20250101_123456.json</code>
+    </div>
+  </div>
+
+  <!-- 答题卡展示 + 日志 -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>答题卡预览</h2>
+      <span class="tag dot">实时对齐 & 区域查看</span>
+    </div>
+    <div id="answerSheetContainer">
+      <canvas id="answerCanvas"></canvas>
+      <canvas id="overlayCanvas"></canvas>
+    </div>
+
+    <h2 style="margin-top: 12px;">批阅后答题卡预览</h2>
+    <div class="small">每个答题区域右上角会显示包含的题号及对应得分/满分，便于整体查看与下载归档。</div>
+    <img id="gradedSheetPreview" alt="批阅后答题卡预览" />
+
+    <div class="panel-header" style="margin-top: 14px;">
+      <h2>运行日志</h2>
+      <span class="small">用于调试模型调用、OCR 与批阅过程</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <!-- 结果展示 -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>题目得分</h2>
+      <span class="small" id="summaryInfo"></span>
+    </div>
+
+    <div style="max-height: 260px; overflow:auto; border-radius:8px; border:1px solid var(--border);">
+      <table>
+        <thead>
+        <tr>
+          <th>序号</th>
+          <th>题号</th>
+          <th>得分</th>
+          <th>满分</th>
+          <th>区域序号</th>
+        </tr>
+        </thead>
+        <tbody id="questionTableBody"></tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top: 12px;">选中题目详情</h2>
+    <div class="small" id="selectedQuestionInfo">
+      点击上表某一行查看对应答题区域；如题号重复，每一条记录会分别显示。
+    </div>
+    <img id="selectedAreaImage" alt="答题区域预览" />
+    <label>该区域 OCR 文本（两阶段模式时）</label>
+    <textarea id="selectedAreaText" readonly></textarea>
+    <label>该区域总体评语（若模型有返回）</label>
+    <textarea id="selectedAreaComment" readonly></textarea>
+  </div>
+</div>
+
+<script>
+  // ===== 题目区域与黑块参考位置 =====
+  const QUESTION_AREAS = [
+    {id: 1, x1: 58,   y1: 292,  x2: 1188, y2: 802},
+    {id: 2, x1: 58,   y1: 800,  x2: 1188, y2: 1310},
+    {id: 3, x1: 58,   y1: 1308, x2: 1188, y2: 1816},
+    {id: 4, x1: 58,   y1: 1814, x2: 1188, y2: 2322},
+    {id: 5, x1: 58,   y1: 2320, x2: 1188, y2: 2830},
+    {id: 6, x1: 58,   y1: 2828, x2: 1188, y2: 3324},
+    {id: 7, x1: 1264, y1: 292,  x2: 2394, y2: 802},
+    {id: 8, x1: 1264, y1: 800,  x2: 2394, y2: 1310},
+    {id: 9, x1: 1264, y1: 1308, x2: 2394, y2: 1816},
+    {id:10, x1: 1264, y1: 1814, x2: 2394, y2: 2322},
+    {id:11, x1: 1264, y1: 2320, x2: 2394, y2: 2830},
+    {id:12, x1: 1264, y1: 2828, x2: 2394, y2: 3324},
+  ];
+  const REF_BLACK_BLOCK_POS = {x: 2266, y: 172};
+  const SETTINGS_KEY = 'answerGraderSettings_v1';
+
+  // ===== DOM 引用 =====
+  const apiBaseUrlInput = document.getElementById('apiBaseUrl');
+  const apiKeyInput = document.getElementById('apiKey');
+  const referenceOcrModelInput = document.getElementById('referenceOcrModel');
+  const answerOcrModelInput = document.getElementById('answerOcrModel');
+  const textGradingModelInput = document.getElementById('textGradingModel');
+  const vlGradingModelInput = document.getElementById('vlGradingModel');
+  const modeRadios = document.querySelectorAll('input[name="mode"]');
+
+  const answerImageInput = document.getElementById('answerImageInput');
+  const referenceImageInput = document.getElementById('referenceImageInput');
+  const referenceTextManualInput = document.getElementById('referenceTextManual');
+  const enableAlignCheckbox = document.getElementById('enableAlign');
+
+  const startButton = document.getElementById('startButton');
+  const downloadJsonButton = document.getElementById('downloadJsonButton');
+  const downloadGradedSheetButton = document.getElementById('downloadGradedSheetButton');
+  const downloadTemplatePdfButton = document.getElementById('downloadTemplatePdfButton');
+  const jsonFileInput = document.getElementById('jsonFileInput');
+  const saveSettingsButton = document.getElementById('saveSettingsButton');
+  const clearSettingsButton = document.getElementById('clearSettingsButton');
+
+  const logDiv = document.getElementById('log');
+  const answerCanvas = document.getElementById('answerCanvas');
+  const overlayCanvas = document.getElementById('overlayCanvas');
+  const gradedSheetPreview = document.getElementById('gradedSheetPreview');
+
+  const questionTableBody = document.getElementById('questionTableBody');
+  const summaryInfo = document.getElementById('summaryInfo');
+  const selectedQuestionInfo = document.getElementById('selectedQuestionInfo');
+  const selectedAreaImage = document.getElementById('selectedAreaImage');
+  const selectedAreaText = document.getElementById('selectedAreaText');
+  const selectedAreaComment = document.getElementById('selectedAreaComment');
+
+  const twoStepConfig = document.getElementById('twoStepConfig');
+  const singleVlConfig = document.getElementById('singleVlConfig');
+
+  // ===== 全局状态 =====
+  let answerSheetOriginalDataUrl = null;
+  let answerSheetAlignedDataUrl = null;
+  let referenceImageDataUrl = null;
+  let areaImages = []; // {id,x1,y1,x2,y2,width,height,image}
+  let gradingResult = null;
+  let currentQuestionList = [];
+  let selectedRowElement = null;
+  let gradedSheetDataUrl = null;
+
+  // ===== 工具函数 =====
+  function log(msg) {
+    const time = new Date().toISOString().substring(11, 19);
+    logDiv.textContent += `[${time}] ${msg}\n`;
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  function drawImageToCanvas(img, canvas) {
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+  }
+
+  function syncOverlayCanvasSize() {
+    overlayCanvas.width = answerCanvas.width;
+    overlayCanvas.height = answerCanvas.height;
+  }
+
+  function clearOverlay() {
+    const ctx = overlayCanvas.getContext('2d');
+    ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  }
+
+  function drawAreaHighlight(area) {
+    clearOverlay();
+    if (!area) return;
+    const ctx = overlayCanvas.getContext('2d');
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(area.x1, area.y1, area.x2 - area.x1, area.y2 - area.y1);
+  }
+
+  // 简单黑块检测
+  function detectBlackBlock(canvas) {
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    if (width === 0 || height === 0) return null;
+
+    const yMax = Math.floor(height / 12);
+    const xMin = Math.floor(width * 5 / 6);
+    const w = width - xMin;
+    const h = yMax;
+    if (w <= 0 || h <= 0) return null;
+
+    const imgData = ctx.getImageData(xMin, 0, w, h);
+    const data = imgData.data;
+    let minX = w, maxX = -1, minY = h, maxY = -1;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const v = (r + g + g + b) >> 2;
+        if (v < 60) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    const centerX = xMin + (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    return {x: centerX, y: centerY};
+  }
+
+  function alignAnswerSheetIfNeeded() {
+    if (!enableAlignCheckbox.checked) {
+      log('未启用黑块校正，直接使用原始答题卡。');
+      return;
+    }
+    const pos = detectBlackBlock(answerCanvas);
+    if (!pos) {
+      log('警告：未检测到定位黑块，跳过对齐。');
+      return;
+    }
+    const dx = REF_BLACK_BLOCK_POS.x - pos.x;
+    const dy = REF_BLACK_BLOCK_POS.y - pos.y;
+    log(`检测到黑块位置 (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}), 平移偏移量 dx=${dx.toFixed(1)}, dy=${dy.toFixed(1)}。`);
+
+    const width = answerCanvas.width;
+    const height = answerCanvas.height;
+    const originalCtx = answerCanvas.getContext('2d');
+    const originalImageData = originalCtx.getImageData(0, 0, width, height);
+
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = width;
+    tmpCanvas.height = height;
+    const tmpCtx = tmpCanvas.getContext('2d');
+    tmpCtx.fillStyle = 'white';
+    tmpCtx.fillRect(0, 0, width, height);
+    tmpCtx.putImageData(originalImageData, dx, dy);
+
+    originalCtx.clearRect(0, 0, width, height);
+    originalCtx.drawImage(tmpCanvas, 0, 0);
+  }
+
+  function cropAreasFromAnswerCanvas() {
+    const res = [];
+    const ctx = answerCanvas.getContext('2d');
+    for (const area of QUESTION_AREAS) {
+      const w = area.x2 - area.x1;
+      const h = area.y2 - area.y1;
+      if (w <= 0 || h <= 0) continue;
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = w;
+      tmpCanvas.height = h;
+      const tctx = tmpCanvas.getContext('2d');
+      tctx.drawImage(
+        answerCanvas,
+        area.x1, area.y1, w, h,
+        0, 0, w, h
+      );
+      const dataUrl = tmpCanvas.toDataURL('image/jpeg', 0.8);
+      res.push({
+        id: area.id,
+        x1: area.x1,
+        y1: area.y1,
+        x2: area.x2,
+        y2: area.y2,
+        width: w,
+        height: h,
+        image: dataUrl
+      });
+    }
+    return res;
+  }
+
+  // OpenAI 兼容 chat.completions
+  async function callChatCompletion(apiBaseUrl, apiKey, model, messages) {
+    const url = apiBaseUrl.replace(/\/+$/, '') + '/chat/completions';
+    const body = { model, messages };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${text}`);
+    }
+    const data = await resp.json();
+    if (!data.choices || !data.choices[0]) {
+      throw new Error('API 响应中没有 choices');
+    }
+    const content = data.choices[0].message.content;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map(part => part.text || '').join('');
+    }
+    return String(content ?? '');
+  }
+
+  // OCR：从图片中提取文字
+  async function extractTextWithVL(apiBaseUrl, apiKey, model, imageDataUrl) {
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+          {
+            type: 'text',
+            text: '请准确提取图像中的所有文字内容，包括数学公式和特殊符号。不要添加任何解释，直接输出文字内容。'
+          }
+        ]
+      }
+    ];
+    return (await callChatCompletion(apiBaseUrl, apiKey, model, messages)).trim();
+  }
+
+  // 文本模型批阅（两阶段模式）
+  async function gradeWithTextModel(apiBaseUrl, apiKey, textModel, referenceText, answerText) {
+    const systemPrompt = '你是一个严格的阅卷老师，将根据参考答案对学生作答进行评分。';
+    const userPrompt = `
+请根据下面的参考答案和学生作答，对本答题区域中的所有题目逐题评分。
+
+要求：
+1. 先从学生作答中识别所有出现的题号（例如“1.”、“(1)”、“第3题”等），并将它们和对应作答内容关联。
+2. 再根据参考答案，为每个题号单独给出得分。
+   - 若参考答案中能看出该题满分，则按参考答案给出的满分评分。
+   - 若参考答案中未给出该题的满分，则默认该题满分为 10 分。
+3. 评分要尽量严格、踩点给分，未提到的要点不得分。
+4. 输出必须是 JSON，不能包含任何其它文字。
+
+JSON 格式必须严格为：
+
+{
+  "items": [
+    {
+      "question_number": "题号（字符串）",
+      "score": 分数（数字）,
+      "max_score": 满分（数字）,
+      "comment": "简要说明学生的得分点和丢分点，可用中文"
+    }
+  ],
+  "overall_comment": "对本区域作答的总体评价，若无可留空字符串"
+}
+
+下面是参考答案：
+${referenceText}
+
+下面是本答题区域的学生作答：
+${answerText}
+`.trim();
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+    const raw = await callChatCompletion(apiBaseUrl, apiKey, textModel, messages);
+    let jsonPart;
+    try {
+      jsonPart = extractJsonObject(raw);
+    } catch (e) {
+      log('警告：批阅模型返回的 JSON 解析失败，将返回空结果。');
+      jsonPart = { items: [], overall_comment: '', _raw: raw };
+    }
+    if (!Array.isArray(jsonPart.items)) jsonPart.items = [];
+    if (typeof jsonPart.overall_comment !== 'string') jsonPart.overall_comment = '';
+    return {
+      items: jsonPart.items,
+      overall_comment: jsonPart.overall_comment,
+      raw_response: raw
+    };
+  }
+
+  // 单 VL 模型直接批阅（看图 + 参考答案文字）
+  async function gradeWithVlModel(apiBaseUrl, apiKey, vlModel, referenceText, areaImageDataUrl) {
+    const systemPrompt = '你是一个严格的阅卷老师，将根据参考答案对学生在图像中的作答进行评分。';
+    const userText = `
+你将看到一张答题区域的图片（学生作答），以及整份试卷的参考答案文本。
+
+要求：
+1. 从图像中识别出所有题号（例如“1.”、“(1)”、“第3题”等）及对应作答。
+2. 根据后面提供的参考答案，对每个题号单独给出得分。
+   - 若参考答案中能看出该题满分，则按参考答案给出的满分评分。
+   - 若参考答案中未给出该题的满分，则默认该题满分为 10 分。
+3. 评分要尽量严格、踩点给分，未提到的要点不得分。
+4. 输出必须是 JSON，不能包含任何其它说明文字。
+
+JSON 格式必须严格为：
+
+{
+  "items": [
+    {
+      "question_number": "题号（字符串）",
+      "score": 分数（数字）,
+      "max_score": 满分（数字）,
+      "comment": "简要说明学生的得分点和丢分点，可用中文"
+    }
+  ],
+  "overall_comment": "对本区域作答的总体评价，若无可留空字符串"
+}
+
+参考答案：
+${referenceText}
+`.trim();
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: areaImageDataUrl } },
+          { type: 'text', text: userText }
+        ]
+      }
+    ];
+    const raw = await callChatCompletion(apiBaseUrl, apiKey, vlModel, messages);
+    let jsonPart;
+    try {
+      jsonPart = extractJsonObject(raw);
+    } catch (e) {
+      log('警告：VL 批阅模型返回的 JSON 解析失败，将返回空结果。');
+      jsonPart = { items: [], overall_comment: '', _raw: raw };
+    }
+    if (!Array.isArray(jsonPart.items)) jsonPart.items = [];
+    if (typeof jsonPart.overall_comment !== 'string') jsonPart.overall_comment = '';
+    return {
+      items: jsonPart.items,
+      overall_comment: jsonPart.overall_comment,
+      raw_response: raw
+    };
+  }
+
+  // 从字符串中提取第一个 JSON 对象
+  function extractJsonObject(str) {
+    const first = str.indexOf('{');
+    const last = str.lastIndexOf('}');
+    if (first === -1 || last === -1 || last <= first) {
+      throw new Error('No JSON object found in string');
+    }
+    const sub = str.slice(first, last + 1);
+    return JSON.parse(sub);
+  }
+
+  // ===== 批阅主流程 =====
+  async function startGrading() {
+    try {
+      gradingResult = null;
+      gradedSheetDataUrl = null;
+      currentQuestionList = [];
+      questionTableBody.innerHTML = '';
+      summaryInfo.textContent = '';
+      selectedQuestionInfo.textContent = '点击上表某一行查看对应答题区域；如题号重复，每一条记录会分别显示。';
+      selectedAreaImage.src = '';
+      selectedAreaText.value = '';
+      selectedAreaComment.value = '';
+      if (gradedSheetPreview) gradedSheetPreview.src = '';
+      clearOverlay();
+      logDiv.textContent = '';
+
+      const apiBaseUrl = apiBaseUrlInput.value.trim();
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiBaseUrl || !apiKey) {
+        alert('请先填写 API Base URL 和 API Key。');
+        return;
+      }
+
+      const mode = Array.from(modeRadios).find(r => r.checked).value;
+
+      const referenceOcrModel = referenceOcrModelInput.value.trim();
+      if (!referenceOcrModel) {
+        alert('请填写参考答案 OCR 模型名称。');
+        return;
+      }
+
+      let answerOcrModel = null;
+      let textGradingModel = null;
+      let vlGradingModel = null;
+
+      if (mode === 'two-step') {
+        answerOcrModel = answerOcrModelInput.value.trim();
+        textGradingModel = textGradingModelInput.value.trim();
+        if (!answerOcrModel || !textGradingModel) {
+          alert('两阶段模式下，请填写“答题区域 OCR 模型”和“批阅模型（文本）”。');
+          return;
+        }
+      } else {
+        vlGradingModel = vlGradingModelInput.value.trim();
+        if (!vlGradingModel) {
+          alert('单一 VL 模式下，请填写“批阅模型（VL）”。');
+          return;
+        }
+      }
+
+      const answerFile = answerImageInput.files[0];
+      const referenceFile = referenceImageInput.files[0];
+      if (!answerFile || !referenceFile) {
+        alert('请上传学生答题卡图片和参考答案图片。');
+        return;
+      }
+
+      startButton.disabled = true;
+      downloadJsonButton.disabled = true;
+      downloadGradedSheetButton.disabled = true;
+      log('开始处理答题卡…');
+
+      // 加载学生答题卡图片
+      log('加载学生答题卡图片…');
+      answerSheetOriginalDataUrl = await readFileAsDataURL(answerFile);
+      const answerImg = await loadImage(answerSheetOriginalDataUrl);
+      drawImageToCanvas(answerImg, answerCanvas);
+      syncOverlayCanvasSize();
+
+      // 黑块对齐
+      alignAnswerSheetIfNeeded();
+
+      // 保存对齐后的整张答题卡
+      answerSheetAlignedDataUrl = answerCanvas.toDataURL('image/jpeg', 0.9);
+
+      // 裁剪答题区域
+      log('裁剪答题区域…');
+      areaImages = cropAreasFromAnswerCanvas();
+      log(`共裁剪到 ${areaImages.length} 个答题区域。`);
+
+      // 读取参考答案图片（用于 OCR）
+      log('加载参考答案图片…');
+      referenceImageDataUrl = await readFileAsDataURL(referenceFile);
+      const manualRef = referenceTextManualInput.value.trim();
+      let referenceText = manualRef;
+
+      if (!referenceText) {
+        log(`使用模型 ${referenceOcrModel} 对参考答案图片进行 OCR…`);
+        referenceText = await extractTextWithVL(apiBaseUrl, apiKey, referenceOcrModel, referenceImageDataUrl);
+      } else {
+        log('使用手动输入的参考答案文本，跳过参考图片 OCR。');
+      }
+      log('参考答案抽取完成（仅展示前 120 字）：\n' + referenceText.slice(0, 120) + (referenceText.length > 120 ? '…' : ''));
+
+      const allItems = [];
+      const areaSummaries = [];
+      let globalIndex = 1;
+
+      for (const area of areaImages) {
+        log(`\n==== 开始批阅区域 #${area.id} ====`);
+        let extractedText = null;
+        let gradingRes = null;
+        const start = performance.now();
+
+        if (mode === 'two-step') {
+          log(`区域 #${area.id}: 使用 ${answerOcrModel} 进行 OCR…`);
+          extractedText = await extractTextWithVL(apiBaseUrl, apiKey, answerOcrModel, area.image);
+          log(`区域 #${area.id}: OCR 完成，长度 ${extractedText.length}。`);
+
+          log(`区域 #${area.id}: 使用文本模型 ${textGradingModel} 进行批阅…`);
+          gradingRes = await gradeWithTextModel(apiBaseUrl, apiKey, textGradingModel, referenceText, extractedText);
+        } else {
+          log(`区域 #${area.id}: 使用 VL 模型 ${vlGradingModel} 直接批阅…`);
+          gradingRes = await gradeWithVlModel(apiBaseUrl, apiKey, vlGradingModel, referenceText, area.image);
+        }
+
+        const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+        log(`区域 #${area.id}: 批阅完成，耗时 ${elapsed} 秒，命中题目数：${gradingRes.items.length}。`);
+
+        for (const item of gradingRes.items) {
+          allItems.push({
+            index: globalIndex++,
+            question_number: String(item.question_number ?? '').trim(),
+            score: Number(item.score ?? 0),
+            max_score: Number(item.max_score ?? 10),
+            comment: String(item.comment ?? ''),
+            area_id: area.id,
+            area_coords: [area.x1, area.y1, area.x2, area.y2],
+            extracted_text: extractedText,
+            area_index: area.id
+          });
+        }
+        areaSummaries.push({
+          area_id: area.id,
+          overall_comment: gradingRes.overall_comment || '',
+          raw_response: gradingRes.raw_response
+        });
+      }
+
+      const totalScore = allItems.reduce((s, it) => s + (isNaN(it.score) ? 0 : it.score), 0);
+
+      gradingResult = {
+        created_at: new Date().toISOString(),
+        api: {
+          base_url: apiBaseUrl,
+          grading_mode: mode,
+          reference_ocr_model: referenceOcrModel,
+          answer_ocr_model: answerOcrModel,
+          text_grading_model: textGradingModel,
+          vl_grading_model: vlGradingModel
+        },
+        reference: {
+          image: referenceImageDataUrl,
+          text: referenceText
+        },
+        answer_sheet: {
+          original_image: answerSheetOriginalDataUrl,
+          aligned_image: answerSheetAlignedDataUrl,
+          areas: areaImages
+        },
+        grading: {
+          items: allItems,
+          area_summaries: areaSummaries,
+          total_score: totalScore
+        }
+      };
+
+      renderGradingResult(gradingResult);
+      downloadJsonButton.disabled = false;
+      await generateGradedAnswerSheetImage();
+      log('\n全部批阅完成。');
+    } catch (err) {
+      console.error(err);
+      log('错误：' + err.message);
+      alert('发生错误：' + err.message);
+    } finally {
+      startButton.disabled = false;
+    }
+  }
+
+  // 生成批阅后答题卡（整图上标注每个区域的题号与得分）
+  async function generateGradedAnswerSheetImage() {
+    try {
+      gradedSheetDataUrl = null;
+      if (gradedSheetPreview) gradedSheetPreview.src = '';
+
+      if (!gradingResult) return;
+
+      const baseUrl =
+        (gradingResult.answer_sheet && gradingResult.answer_sheet.aligned_image) ||
+        (answerCanvas.width ? answerCanvas.toDataURL('image/jpeg', 0.9) : null);
+
+      if (!baseUrl) {
+        log('无法生成批阅后答题卡：未找到对齐后的答题卡图像。');
+        return;
+      }
+
+      const img = await loadImage(baseUrl);
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      const items = (gradingResult.grading && gradingResult.grading.items) || [];
+      const areaMap = new Map(); // area_id -> items[]
+      for (const it of items) {
+        if (!it.area_id && it.area_id !== 0) continue;
+        if (!areaMap.has(it.area_id)) areaMap.set(it.area_id, []);
+        areaMap.get(it.area_id).push(it);
+      }
+
+      const areas = (gradingResult.answer_sheet && gradingResult.answer_sheet.areas) || QUESTION_AREAS;
+
+      ctx.font = '24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI"';
+      ctx.textBaseline = 'top';
+
+      for (const area of areas) {
+        const areaId = area.id;
+        const areaItems = areaMap.get(areaId);
+        if (!areaItems || areaItems.length === 0) continue;
+
+        const lines = areaItems.map(it => `${it.question_number}:${it.score}/${it.max_score}`);
+
+        const padding = 6;
+        const lineHeight = 26;
+        let maxWidth = 0;
+        for (const line of lines) {
+          const w = ctx.measureText(line).width;
+          if (w > maxWidth) maxWidth = w;
+        }
+        const boxWidth = maxWidth + padding * 2;
+        const boxHeight = lineHeight * lines.length + padding * 2;
+
+        const x = area.x2 - boxWidth - 4;
+        const y = area.y1 + 4;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.strokeStyle = 'rgba(15,23,42,0.4)';
+        ctx.lineWidth = 2;
+
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(x, y, boxWidth, boxHeight, 6);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(x, y, boxWidth, boxHeight);
+          ctx.strokeRect(x, y, boxWidth, boxHeight);
+        }
+
+        ctx.fillStyle = '#111827';
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], x + padding, y + padding + i * lineHeight);
+        }
+      }
+
+      gradedSheetDataUrl = c.toDataURL('image/jpeg', 0.9);
+      if (gradedSheetPreview) gradedSheetPreview.src = gradedSheetDataUrl;
+      downloadGradedSheetButton.disabled = !gradedSheetDataUrl;
+      log('已生成批阅后答题卡预览。');
+    } catch (e) {
+      console.error(e);
+      log('生成批阅后答题卡失败：' + e.message);
+    }
+  }
+
+  // 渲染批阅结果
+  function renderGradingResult(result) {
+    const items = (result.grading && result.grading.items) || [];
+    const areas = (result.answer_sheet && result.answer_sheet.areas) || [];
+    const totalScore = result.grading.total_score || 0;
+
+    const sorted = [...items].sort((a, b) => {
+      const na = parseInt(a.question_number, 10);
+      const nb = parseInt(b.question_number, 10);
+      if (!isNaN(na) && !isNaN(nb)) {
+        if (na !== nb) return na - nb;
+      }
+      return String(a.question_number).localeCompare(String(b.question_number), 'zh-CN') ||
+             (a.index || 0) - (b.index || 0);
+    });
+
+    currentQuestionList = sorted;
+    questionTableBody.innerHTML = '';
+    sorted.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      tr.dataset.index = String(idx);
+      const tdIdx = document.createElement('td');
+      tdIdx.textContent = item.index ?? (idx + 1);
+      const tdQ = document.createElement('td');
+      tdQ.textContent = item.question_number || '';
+      const tdScore = document.createElement('td');
+      tdScore.textContent = (item.score ?? '') + '';
+      const tdMax = document.createElement('td');
+      tdMax.textContent = (item.max_score ?? '') + '';
+      const tdArea = document.createElement('td');
+      tdArea.textContent = item.area_id ?? '';
+      tr.appendChild(tdIdx);
+      tr.appendChild(tdQ);
+      tr.appendChild(tdScore);
+      tr.appendChild(tdMax);
+      tr.appendChild(tdArea);
+      tr.addEventListener('click', () => onQuestionRowClick(tr, item, areas));
+      questionTableBody.appendChild(tr);
+    });
+
+    summaryInfo.textContent =
+      `共 ${sorted.length} 条评分记录，总分（简单累加）：${totalScore.toFixed(2)}。若题号重复，每一条记录都会单独显示，不做合并。`;
+
+    if (result.answer_sheet && result.answer_sheet.aligned_image) {
+      answerSheetAlignedDataUrl = result.answer_sheet.aligned_image;
+      loadImage(result.answer_sheet.aligned_image).then(img => {
+        drawImageToCanvas(img, answerCanvas);
+        syncOverlayCanvasSize();
+      }).catch(() => {});
+    }
+  }
+
+  function onQuestionRowClick(tr, item, areas) {
+    if (selectedRowElement) {
+      selectedRowElement.classList.remove('selected');
+    }
+    selectedRowElement = tr;
+    tr.classList.add('selected');
+
+    const area = areas.find(a => a.id === item.area_id);
+    selectedQuestionInfo.textContent =
+      `序号：${item.index ?? ''}，题号：${item.question_number}，得分：${item.score}/${item.max_score}，区域序号：${item.area_id}`;
+
+    if (area && area.image) {
+      selectedAreaImage.src = area.image;
+      drawAreaHighlight(area);
+    } else {
+      selectedAreaImage.src = '';
+      clearOverlay();
+    }
+    selectedAreaText.value = item.extracted_text || '';
+
+    let areaComment = '';
+    if (gradingResult && gradingResult.grading && Array.isArray(gradingResult.grading.area_summaries)) {
+      const s = gradingResult.grading.area_summaries.find(s => s.area_id === item.area_id);
+      if (s && s.overall_comment) areaComment = s.overall_comment;
+    }
+    selectedAreaComment.value = areaComment;
+  }
+
+  // 下载 JSON 结果
+  function downloadJson() {
+    if (!gradingResult) {
+      alert('当前没有批阅结果可导出。');
+      return;
+    }
+    const ts = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15);
+    const filename = `grading_result_${ts}.json`;
+    const blob = new Blob([JSON.stringify(gradingResult, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // 下载批阅后答题卡
+  function downloadGradedSheet() {
+    if (!gradedSheetDataUrl) {
+      alert('尚未生成批阅后的答题卡，请先完成批阅或加载批阅结果。');
+      return;
+    }
+    const ts = new Date().toISOString().replace(/[:.-]/g, '').slice(0, 15);
+    const a = document.createElement('a');
+    a.href = gradedSheetDataUrl;
+    a.download = `graded_answer_sheet_${ts}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // 下载预制标准答题卡 PDF（/answer_card.pdf）
+  function downloadPresetTemplatePdf() {
+    const a = document.createElement('a');
+    a.href = '/answer_sheet.pdf';
+    a.download = 'answer_sheet.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // 从 JSON 对象加载结果
+  function loadGradingResultFromObject(obj) {
+    gradingResult = obj;
+    renderGradingResult(obj);
+    downloadJsonButton.disabled = false;
+    generateGradedAnswerSheetImage();
+    log('已从 JSON 加载批阅结果。');
+  }
+
+  async function loadJsonFromFileInput(file) {
+    try {
+      const text = await file.text();
+      const obj = JSON.parse(text);
+      loadGradingResultFromObject(obj);
+    } catch (e) {
+      alert('解析 JSON 文件失败：' + e.message);
+    }
+  }
+
+  async function loadJsonFromUrl(url) {
+    try {
+      log(`尝试从 URL 加载 JSON：${url}`);
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const obj = await resp.json();
+      loadGradingResultFromObject(obj);
+    } catch (e) {
+      log('从 URL 加载 JSON 失败：' + e.message);
+    }
+  }
+
+  // ===== 设置保存 / 恢复 =====
+  function saveSettingsToLocalStorage() {
+    const cfg = {
+      apiBaseUrl: apiBaseUrlInput.value.trim(),
+      apiKey: apiKeyInput.value,
+      referenceOcrModel: referenceOcrModelInput.value.trim(),
+      answerOcrModel: answerOcrModelInput.value.trim(),
+      textGradingModel: textGradingModelInput.value.trim(),
+      vlGradingModel: vlGradingModelInput.value.trim(),
+      mode: Array.from(modeRadios).find(r => r.checked).value,
+      enableAlign: enableAlignCheckbox.checked
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg));
+    log('已将 API 和模型设置保存到浏览器本地。');
+  }
+
+  function loadSettingsFromLocalStorage() {
+    try {
+      const data = localStorage.getItem(SETTINGS_KEY);
+      if (!data) return;
+      const cfg = JSON.parse(data);
+      if (cfg.apiBaseUrl) apiBaseUrlInput.value = cfg.apiBaseUrl;
+      if (typeof cfg.apiKey === 'string') apiKeyInput.value = cfg.apiKey;
+      if (cfg.referenceOcrModel) referenceOcrModelInput.value = cfg.referenceOcrModel;
+      if (cfg.answerOcrModel) answerOcrModelInput.value = cfg.answerOcrModel;
+      if (cfg.textGradingModel) textGradingModelInput.value = cfg.textGradingModel;
+      if (cfg.vlGradingModel) vlGradingModelInput.value = cfg.vlGradingModel;
+      if (typeof cfg.enableAlign === 'boolean') enableAlignCheckbox.checked = cfg.enableAlign;
+      if (cfg.mode === 'two-step' || cfg.mode === 'single-vl') {
+        modeRadios.forEach(r => { r.checked = (r.value === cfg.mode); });
+        const mode = cfg.mode;
+        if (mode === 'two-step') {
+          twoStepConfig.style.display = '';
+          singleVlConfig.style.display = 'none';
+        } else {
+          twoStepConfig.style.display = 'none';
+          singleVlConfig.style.display = '';
+        }
+      }
+      log('已从浏览器本地加载 API 和模型设置。');
+    } catch (e) {
+      console.warn('加载设置失败：', e);
+    }
+  }
+
+  function clearSettingsFromLocalStorage() {
+    localStorage.removeItem(SETTINGS_KEY);
+    apiBaseUrlInput.value = '';
+    apiKeyInput.value = '';
+    referenceOcrModelInput.value = '';
+    answerOcrModelInput.value = '';
+    textGradingModelInput.value = '';
+    vlGradingModelInput.value = '';
+    enableAlignCheckbox.checked = true;
+    modeRadios.forEach(r => { r.checked = (r.value === 'two-step'); });
+    twoStepConfig.style.display = '';
+    singleVlConfig.style.display = 'none';
+    log('已清除本地保存的设置。');
+  }
+
+  // ===== 事件绑定 =====
+  startButton.addEventListener('click', startGrading);
+  downloadJsonButton.addEventListener('click', downloadJson);
+  downloadGradedSheetButton.addEventListener('click', downloadGradedSheet);
+  downloadTemplatePdfButton.addEventListener('click', downloadPresetTemplatePdf);
+
+  jsonFileInput.addEventListener('change', () => {
+    const file = jsonFileInput.files[0];
+    if (file) loadJsonFromFileInput(file);
+  });
+
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      const mode = Array.from(modeRadios).find(r => r.checked).value;
+      if (mode === 'two-step') {
+        twoStepConfig.style.display = '';
+        singleVlConfig.style.display = 'none';
+      } else {
+        twoStepConfig.style.display = 'none';
+        singleVlConfig.style.display = '';
+      }
+    });
+  });
+
+  saveSettingsButton.addEventListener('click', saveSettingsToLocalStorage);
+  clearSettingsButton.addEventListener('click', clearSettingsFromLocalStorage);
+
+  window.addEventListener('load', () => {
+    loadSettingsFromLocalStorage();
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get('file');
+    if (file) {
+      loadJsonFromUrl(file);
+    }
+  });
+</script>
+</body>
+</html>
