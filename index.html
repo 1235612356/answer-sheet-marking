@@ -517,6 +517,7 @@
       <button id="downloadJsonButton" class="secondary" disabled>下载 JSON 结果</button>
       <button id="downloadGradedSheetButton" class="secondary" disabled>下载批阅后答题卡</button>
       <button id="downloadTemplatePdfButton" class="secondary">下载标准答题卡（PDF）</button>
+      <div class="small">注意PDF应选择原始大小打印。</div>
     </div>
 
     <h2 style="margin-top:16px;">4. 加载已有 JSON 结果</h2>
@@ -610,18 +611,18 @@
 <script>
   // ===== 题目区域与黑块参考位置 =====
   const QUESTION_AREAS = [
-    {id: 1, x1: 58,   y1: 292,  x2: 1188, y2: 802},
-    {id: 2, x1: 58,   y1: 800,  x2: 1188, y2: 1310},
-    {id: 3, x1: 58,   y1: 1308, x2: 1188, y2: 1816},
-    {id: 4, x1: 58,   y1: 1814, x2: 1188, y2: 2322},
-    {id: 5, x1: 58,   y1: 2320, x2: 1188, y2: 2830},
-    {id: 6, x1: 58,   y1: 2828, x2: 1188, y2: 3324},
-    {id: 7, x1: 1264, y1: 292,  x2: 2394, y2: 802},
-    {id: 8, x1: 1264, y1: 800,  x2: 2394, y2: 1310},
-    {id: 9, x1: 1264, y1: 1308, x2: 2394, y2: 1816},
-    {id:10, x1: 1264, y1: 1814, x2: 2394, y2: 2322},
-    {id:11, x1: 1264, y1: 2320, x2: 2394, y2: 2830},
-    {id:12, x1: 1264, y1: 2828, x2: 2394, y2: 3324},
+    {id: 1, x1: 58,   y1: 288,  x2: 1188, y2: 800},
+    {id: 2, x1: 58,   y1: 795,  x2: 1188, y2: 1304},
+    {id: 3, x1: 58,   y1: 1300, x2: 1188, y2: 1808},
+    {id: 4, x1: 58,   y1: 1806, x2: 1188, y2: 2314},
+    {id: 5, x1: 58,   y1: 2308, x2: 1188, y2: 2818},
+    {id: 6, x1: 58,   y1: 2816, x2: 1188, y2: 3324},
+    {id: 7, x1: 1264, y1: 288,  x2: 2394, y2: 800},
+    {id: 8, x1: 1264, y1: 795,  x2: 2394, y2: 1304},
+    {id: 9, x1: 1264, y1: 1300, x2: 2394, y2: 1808},
+    {id:10, x1: 1264, y1: 1806, x2: 2394, y2: 2314},
+    {id:11, x1: 1264, y1: 2308, x2: 2394, y2: 2818},
+    {id:12, x1: 1264, y1: 2816, x2: 2394, y2: 3324},
   ];
   const REF_BLACK_BLOCK_POS = {x: 2266, y: 172};
   const SETTINGS_KEY = 'answerGraderSettings_v1';
@@ -1714,3 +1715,4 @@ ${referenceText}
 </script>
 </body>
 </html>
+
