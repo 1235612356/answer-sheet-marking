@@ -1080,7 +1080,7 @@
   async function gradeWithTextModel(apiBaseUrl, apiKey, textModel, referenceText, answerText) {
     const systemPrompt = '你是一个严格但公正的阅卷老师，将根据参考答案对学生作答进行评分。';
     const userPrompt = `
-请根据下面的参考答案和学生作答，对本答题区域中的所有题目逐题评分。
+请根据下面的整份试卷的参考答案和学生作答，对本答题区域中的所有题目逐题评分。
 
 重要说明：
 1. 只要学生答案内容正确，就应该给分，不要因为涂改、字迹等形式问题扣分
@@ -1128,7 +1128,7 @@ ${answerText}
   async function gradeWithVlModel(apiBaseUrl, apiKey, vlModel, referenceText, areaImageDataUrl) {
     const systemPrompt = '你是一个严格但公正的阅卷老师，将根据参考答案对学生在图像中的作答进行评分。';
     const userText = `
-你将看到一张答题区域的图片（学生作答），以及参考答案文本。
+你将看到一张答题区域的图片（学生作答），以及整份试卷的参考答案文本。
 
 重要说明：
 1. 只要学生答案内容正确，就应该给分，不要因为涂改、字迹等形式问题扣分
@@ -2077,3 +2077,4 @@ ${referenceText}
 </script>
 </body>
 </html>
+
