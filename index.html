@@ -1553,125 +1553,216 @@ ${referenceText}
 
   // 生成批阅后答题卡
   async function generateGradedAnswerSheets() {
+// 在全局作用域确保两个数组用于保存两类图片的 dataURL
+  let gradedSheetDataUrls = gradedSheetDataUrls || []; // 可能已有占位
+  let gradedScoreOnlyDataUrls = [];
+
+  async function generateGradedAnswerSheets() {
     try {
       gradedSheetDataUrls = [];
+      gradedScoreOnlyDataUrls = [];
       if (gradedSheetPreview) gradedSheetPreview.src = '';
 
       if (!gradingResult) return;
 
       const items = gradingResult.grading.items || [];
-      
+
       // 兼容旧格式和新格式
       let sheets = [];
       if (gradingResult.answer_sheets) {
-        // 新格式
         sheets = gradingResult.answer_sheets;
       } else if (gradingResult.answer_sheet) {
-        // 旧格式
         sheets = [{
           original: gradingResult.answer_sheet.original_image,
           aligned: gradingResult.answer_sheet.aligned_image
         }];
       }
-      
+
+      // 按 area_id 聚合 items，便于在每个区域右侧绘制该区域的小题评分列表
+      const areaMap = new Map();
+      for (const it of items) {
+        if (it.sheet_index !== undefined && it.sheet_index !== undefined) {
+          // 保持原有 sheet_index 使用（后面按 sheet 划分时会以 item.sheet_index 为准）
+        }
+        const key = it.area_id;
+        if (!areaMap.has(key)) areaMap.set(key, []);
+        areaMap.get(key).push(it);
+      }
+
       for (let sheetIdx = 0; sheetIdx < sheets.length; sheetIdx++) {
         const sheet = sheets[sheetIdx];
         const baseUrl = sheet.aligned || sheet.original;
         if (!baseUrl) continue;
 
-        const img = await loadImage(baseUrl);
+        const img = baseUrl ? await loadImage(baseUrl) : null;
+        const width = img ? img.naturalWidth : 2480; // 回退宽高（A4-ish）以防万一
+        const height = img ? img.naturalHeight : 3508;
+
+        // 1) 带背景的画布（原来的行为）
         const c = document.createElement('canvas');
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
+        c.width = width;
+        c.height = height;
         const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        if (img) ctx.drawImage(img, 0, 0);
 
-        const areaMap = new Map();
-        for (const it of items) {
-          if (it.sheet_index !== undefined && it.sheet_index !== sheetIdx) continue;
-          if (it.sheet_index === undefined && sheetIdx !== 0) continue; // 旧格式只有一张卡
-          const key = it.area_id;
-          if (!areaMap.has(key)) areaMap.set(key, []);
-          areaMap.get(key).push(it);
-        }
+        // 2) 仅评分的白底画布
+        const cs = document.createElement('canvas');
+        cs.width = width;
+        cs.height = height;
+        const ctxs = cs.getContext('2d');
+        // 白底
+        ctxs.fillStyle = '#ffffff';
+        ctxs.fillRect(0, 0, cs.width, cs.height);
 
+        // 绘制参数
+        const padding = 8;
+        const lineHeight = 26;
         ctx.font = '24px system-ui';
         ctx.textBaseline = 'top';
+        ctxs.font = ctx.font;
+        ctxs.textBaseline = 'top';
 
+        // 遍历 areaMap 找到属于本 sheet 的区域项目并绘制
         for (const [areaId, areaItems] of areaMap) {
-          const area = QUESTION_AREAS.find(a => a.id === areaId);
-          if (!area) continue;
+          // area 信息在 gradingResult 的 area_summaries 或 QUESTION_AREAS 中
+          // 尝试从 gradingResult.answer_sheets 找到对应 area 的 coords
+          let areaCoords = null;
+          // 优先使用 gradingResult.answer_sheets（新格式）
+          if (gradingResult.answer_sheets && gradingResult.answer_sheets[sheetIdx] && gradingResult.answer_sheets[sheetIdx].areas) {
+            const areaDef = gradingResult.answer_sheets[sheetIdx].areas.find(a => a.id === areaId || String(a.id) === String(areaId));
+            if (areaDef && areaDef.coords) {
+              areaCoords = areaDef.coords; // 假设为 [x1,y1,x2,y2]
+            } else if (areaDef && areaDef.x1 !== undefined) {
+              areaCoords = [areaDef.x1, areaDef.y1, areaDef.x2, areaDef.y2];
+            }
+          }
+          // 兼容 gradingResult.area_summaries / items 中的 area_coords
+          if (!areaCoords) {
+            const itemWithCoords = areaItems.find(it => it.area_coords && it.area_coords.length === 4);
+            if (itemWithCoords) areaCoords = itemWithCoords.area_coords;
+          }
+          // 最后尝试全局常量 QUESTION_AREAS（如果定义并且 id 匹配）
+          if (!areaCoords && typeof QUESTION_AREAS !== 'undefined') {
+            const q = QUESTION_AREAS.find(a => String(a.id) === String(areaId));
+            if (q && q.x1 !== undefined) areaCoords = [q.x1, q.y1, q.x2, q.y2];
+          }
 
+          if (!areaCoords) continue;
+          const [ax1, ay1, ax2, ay2] = areaCoords.map(Number);
+          // 合并该区域内的题目文本
           const lines = areaItems.map(it => `${it.question_number}:${it.score}/${it.max_score}`);
 
-          const padding = 6;
-          const lineHeight = 26;
-          let maxWidth = 0;
-          for (const line of lines) {
-            const w = ctx.measureText(line).width;
-            if (w > maxWidth) maxWidth = w;
+          // 计算文本框宽高（先测量最长行）
+          const measureCtx = ctx; // 任选一个上下文测量字体
+          let maxW = 0;
+          for (const ln of lines) {
+            maxW = Math.max(maxW, measureCtx.measureText(ln).width);
           }
-          const boxWidth = maxWidth + padding * 2;
-          const boxHeight = lineHeight * lines.length + padding * 2;
+          const boxWidth = Math.ceil(maxW + padding * 2);
+          const boxHeight = lines.length * lineHeight + padding * 2;
 
-          const x = area.x2 - boxWidth - 4;
-          const y = area.y1 + 4;
+          // 放到区域右侧，若越界则放到左侧
+          let tx = Math.round(ax2 + padding);
+          let ty = Math.round(ay1);
+          if (tx + boxWidth > c.width - 6) {
+            tx = Math.round(ax1 - boxWidth - padding);
+          }
+          // 如果仍然越界，限制到画布内
+          tx = Math.max(6, Math.min(tx, c.width - boxWidth - 6));
+          ty = Math.max(6, Math.min(ty, c.height - boxHeight - 6));
 
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.strokeStyle = 'rgba(15,23,42,0.4)';
+          // 计算区域整体得分 / 满分（用于底色渐变或首行颜色）
+          const totalScore = areaItems.reduce((s, t) => s + (Number(t.score) || 0), 0);
+          const totalMax = areaItems.reduce((s, t) => s + (Number(t.max_score) || 0), 0);
+          const fillColor = getScoreColor(totalScore, totalMax);
+
+          // 绘制到带背景画布（半透明底 + 描边）
+          ctx.save();
+          ctx.fillStyle = fillColor;
+          ctx.globalAlpha = 0.15;
+          roundRect(ctx, tx, ty, boxWidth, boxHeight, 6, true, false);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = fillColor;
           ctx.lineWidth = 2;
-
-          if (ctx.roundRect) {
-            ctx.beginPath();
-            ctx.roundRect(x, y, boxWidth, boxHeight, 6);
-            ctx.fill();
-            ctx.stroke();
-          } else {
-            ctx.fillRect(x, y, boxWidth, boxHeight);
-            ctx.strokeRect(x, y, boxWidth, boxHeight);
-          }
-
+          roundRect(ctx, tx + 1, ty + 1, boxWidth - 2, boxHeight - 2, 6, false, true);
           ctx.fillStyle = '#111827';
+          ctx.font = '24px system-ui';
           for (let i = 0; i < lines.length; i++) {
-            ctx.fillText(lines[i], x + padding, y + padding + i * lineHeight);
+            ctx.fillStyle = '#0b1220';
+            ctx.fillText(lines[i], tx + padding, ty + padding + i * lineHeight);
           }
+          ctx.restore();
+
+          // 绘制到仅评分画布（不透明背景 + 更醒目）
+          ctxs.save();
+          ctxs.fillStyle = fillColor;
+          ctxs.globalAlpha = 0.12;
+          roundRect(ctxs, tx, ty, boxWidth, boxHeight, 6, true, false);
+          ctxs.globalAlpha = 1;
+          ctxs.strokeStyle = fillColor;
+          ctxs.lineWidth = 2;
+          roundRect(ctxs, tx + 1, ty + 1, boxWidth - 2, boxHeight - 2, 6, false, true);
+          ctxs.fillStyle = '#0b1220';
+          ctxs.font = '24px system-ui';
+          for (let i = 0; i < lines.length; i++) {
+            ctxs.fillText(lines[i], tx + padding, ty + padding + i * lineHeight);
+          }
+          ctxs.restore();
         }
 
-        const sheetItems = items.filter(it => {
-          if (it.sheet_index !== undefined) return it.sheet_index === sheetIdx;
-          return sheetIdx === 0; // 旧格式
-        });
-        const sheetScore = sheetItems.reduce((s, it) => s + (it.score || 0), 0);
-        
-        ctx.font = 'bold 60px system-ui';
-        ctx.fillStyle = '#dc2626';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        
-        const totalText = `总分: ${sheetScore.toFixed(1)}`;
-        const textWidth = ctx.measureText(totalText).width;
-        const padding = 20;
-        
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(c.width - textWidth - padding * 2, padding, textWidth + padding * 2, 80);
-        
-        ctx.fillStyle = '#dc2626';
-        ctx.fillText(totalText, c.width - padding, padding + 10);
+        // helper: rounded rect
+        function roundRect(ctxx, x, y, w, h, r, fill, stroke) {
+          if (typeof r === 'undefined') r = 5;
+          if (r > w / 2) r = w / 2;
+          if (r > h / 2) r = h / 2;
+          ctxx.beginPath();
+          ctxx.moveTo(x + r, y);
+          ctxx.arcTo(x + w, y, x + w, y + h, r);
+          ctxx.arcTo(x + w, y + h, x, y + h, r);
+          ctxx.arcTo(x, y + h, x, y, r);
+          ctxx.arcTo(x, y, x + w, y, r);
+          ctxx.closePath();
+          if (fill) ctxx.fill();
+          if (stroke) ctxx.stroke();
+        }
 
-        const dataUrl = c.toDataURL('image/jpeg', 0.9);
-        gradedSheetDataUrls.push(dataUrl);
+        // 导出 dataURL
+        gradedSheetDataUrls.push(c.toDataURL('image/jpeg', 0.9));
+        gradedScoreOnlyDataUrls.push(cs.toDataURL('image/jpeg', 0.9));
       }
 
-      if (gradedSheetDataUrls.length > 0 && gradedSheetPreview) {
-        gradedSheetPreview.src = gradedSheetDataUrls[0];
+      // 默认在预览中显示第一张（或空）
+      const modeSelect = document.getElementById('gradedModeSelect');
+      if (modeSelect) {
+        const sel = modeSelect.value || 'sheet';
+        if (sel === 'scores' && gradedScoreOnlyDataUrls[0]) {
+          gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+        } else if (gradedSheetDataUrls[0]) {
+          gradedSheetPreview.src = gradedSheetDataUrls[0];
+        } else {
+          gradedSheetPreview.removeAttribute('src');
+        }
+      } else {
+        if (gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
       }
-      
-      downloadGradedSheetButton.disabled = gradedSheetDataUrls.length === 0;
-      log('已生成批阅后答题卡预览。');
-    } catch (e) {
-      console.error(e);
-      log('生成批阅后答题卡失败：' + e.message);
+    } catch (err) {
+      console.error('生成批阅后答题卡失败:', err);
     }
+  }
+
+  // 切换预览模式（带背景 / 仅评分）
+  const gradedModeSelectEl = document.getElementById('gradedModeSelect');
+  if (gradedModeSelectEl) {
+    gradedModeSelectEl.addEventListener('change', () => {
+      const v = gradedModeSelectEl.value;
+      if (v === 'scores') {
+        if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+        else if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
+      } else {
+        if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
+        else if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+      }
+    });
   }
 
   // 更新总分进度条
@@ -2083,165 +2174,10 @@ ${referenceText}
       loadJsonFromUrl(file);
     }
   });
-  
-(function(){
-  // gradedScoreOnlyDataUrls 用于保存仅评分白底图
-  gradedScoreOnlyDataUrls = gradedScoreOnlyDataUrls || [];
-
-  // 覆盖/替换 generateGradedAnswerSheets，最小改动：同时生成带背景与仅评分图
-  async function generateGradedAnswerSheets() {
-    try {
-      gradedSheetDataUrls = [];
-      gradedScoreOnlyDataUrls = [];
-      if (gradedSheetPreview) gradedSheetPreview.src = '';
-
-      if (!gradingResult) return;
-      const items = gradingResult.grading.items || [];
-
-      // 兼容旧/new 格式
-      let sheets = [];
-      if (gradingResult.answer_sheets) {
-        sheets = gradingResult.answer_sheets;
-      } else if (gradingResult.answer_sheet) {
-        sheets = [{ original: gradingResult.answer_sheet.original_image, aligned: gradingResult.answer_sheet.aligned_image }];
-      }
-
-      // 按 area_id 聚合 items
-      const areaMap = new Map();
-      for (const it of items) {
-        const key = it.area_id;
-        if (!areaMap.has(key)) areaMap.set(key, []);
-        areaMap.get(key).push(it);
-      }
-
-      for (let sheetIdx = 0; sheetIdx < sheets.length; sheetIdx++) {
-        const sheet = sheets[sheetIdx];
-        const baseUrl = sheet.aligned || sheet.original;
-        if (!baseUrl) continue;
-
-        const img = await loadImage(baseUrl);
-        const width = img.naturalWidth;
-        const height = img.naturalHeight;
-
-        // 带背景画布
-        const c = document.createElement('canvas'); c.width = width; c.height = height; const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-
-        // 仅评分白底画布
-        const cs = document.createElement('canvas'); cs.width = width; cs.height = height; const ctxs = cs.getContext('2d');
-        ctxs.fillStyle = '#ffffff'; ctxs.fillRect(0,0,cs.width,cs.height);
-
-        ctx.font = '24px system-ui'; ctx.textBaseline = 'top';
-        ctxs.font = ctx.font; ctxs.textBaseline = 'top';
-
-        const padding = 8; const lineHeight = 26;
-
-        for (const [areaId, areaItems] of areaMap) {
-          // 尝试获取区域坐标：优先 gradingResult.answer_sheets -> item.area_coords -> QUESTION_AREAS
-          let areaCoords = null;
-          if (gradingResult.answer_sheets && gradingResult.answer_sheets[sheetIdx] && gradingResult.answer_sheets[sheetIdx].areas) {
-            const areaDef = gradingResult.answer_sheets[sheetIdx].areas.find(a => String(a.id) === String(areaId));
-            if (areaDef) {
-              if (areaDef.coords) areaCoords = areaDef.coords;
-              else if (areaDef.x1 !== undefined) areaCoords = [areaDef.x1, areaDef.y1, areaDef.x2, areaDef.y2];
-            }
-          }
-          if (!areaCoords) {
-            const itemWithCoords = areaItems.find(it => it.area_coords && it.area_coords.length === 4);
-            if (itemWithCoords) areaCoords = itemWithCoords.area_coords;
-          }
-          if (!areaCoords && typeof QUESTION_AREAS !== 'undefined') {
-            const q = QUESTION_AREAS.find(a => String(a.id) === String(areaId));
-            if (q && q.x1 !== undefined) areaCoords = [q.x1, q.y1, q.x2, q.y2];
-          }
-          if (!areaCoords) continue;
-
-          const [ax1, ay1, ax2, ay2] = areaCoords.map(Number);
-          const lines = areaItems.map(it => `${it.question_number}:${it.score}/${it.max_score}`);
-
-          // 测量文本框
-          let maxW = 0; for (const ln of lines) { maxW = Math.max(maxW, ctx.measureText(ln).width); }
-          const boxWidth = Math.ceil(maxW + padding*2); const boxHeight = lines.length * lineHeight + padding*2;
-
-          // 放到区域右侧，若超出则放左侧；再确保不出界
-          let tx = Math.round(ax2 + padding); let ty = Math.round(ay1);
-          if (tx + boxWidth > c.width - 6) { tx = Math.round(ax1 - boxWidth - padding); }
-          tx = Math.max(6, Math.min(tx, c.width - boxWidth - 6));
-          ty = Math.max(6, Math.min(ty, c.height - boxHeight - 6));
-
-          const totalScore = areaItems.reduce((s,t)=>s+(Number(t.score)||0),0);
-          const totalMax = areaItems.reduce((s,t)=>s+(Number(t.max_score)||0),0);
-          const fillColor = getScoreColor(totalScore, totalMax);
-
-          // 绘制到带背景画布
-          ctx.save();
-          ctx.fillStyle = fillColor; ctx.globalAlpha = 0.15; roundRect(ctx, tx, ty, boxWidth, boxHeight, 6, true, false); ctx.globalAlpha = 1;
-          ctx.strokeStyle = fillColor; ctx.lineWidth = 2; roundRect(ctx, tx+1, ty+1, boxWidth-2, boxHeight-2, 6, false, true);
-          ctx.fillStyle = '#0b1220'; ctx.font = '24px system-ui';
-          for (let i=0;i<lines.length;i++){ ctx.fillText(lines[i], tx + padding, ty + padding + i*lineHeight); }
-          ctx.restore();
-
-          // 绘制到仅评分画布
-          ctxs.save();
-          ctxs.fillStyle = fillColor; ctxs.globalAlpha = 0.12; roundRect(ctxs, tx, ty, boxWidth, boxHeight, 6, true, false); ctxs.globalAlpha =1;
-          ctxs.strokeStyle = fillColor; ctxs.lineWidth = 2; roundRect(ctxs, tx+1, ty+1, boxWidth-2, boxHeight-2, 6, false, true);
-          ctxs.fillStyle = '#0b1220'; ctxs.font = '24px system-ui';
-          for (let i=0;i<lines.length;i++){ ctxs.fillText(lines[i], tx + padding, ty + padding + i*lineHeight); }
-          ctxs.restore();
-        }
-
-        function roundRect(ctxx, x, y, w, h, r, fill, stroke) {
-          if (typeof r === 'undefined') r = 5;
-          if (r > w/2) r = w/2;
-          if (r > h/2) r = h/2;
-          ctxx.beginPath();
-          ctxx.moveTo(x+r, y);
-          ctxx.arcTo(x+w, y, x+w, y+h, r);
-          ctxx.arcTo(x+w, y+h, x, y+h, r);
-          ctxx.arcTo(x, y+h, x, y, r);
-          ctxx.arcTo(x, y, x+w, y, r);
-          ctxx.closePath();
-          if (fill) ctxx.fill();
-          if (stroke) ctxx.stroke();
-        }
-
-        gradedSheetDataUrls.push(c.toDataURL('image/jpeg', 0.9));
-        gradedScoreOnlyDataUrls.push(cs.toDataURL('image/jpeg', 0.9));
-      }
-
-      // 初始预览显示逻辑
-      const modeSelect = document.getElementById('gradedModeSelect');
-      if (modeSelect) {
-        const sel = modeSelect.value || 'sheet';
-        if (sel === 'scores' && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
-        else if (gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
-      } else {
-        if (gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
-      }
-
-    } catch (err) {
-      console.error('生成批阅后答题卡失败:', err);
-    }
-  }
-
-  // 切换预览模式事件
-  const gradedModeSelectEl = document.getElementById('gradedModeSelect');
-  if (gradedModeSelectEl) {
-    gradedModeSelectEl.addEventListener('change', () => {
-      const v = gradedModeSelectEl.value;
-      if (v === 'scores') {
-        if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
-        else if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
-      } else {
-        if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
-        else if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
-      }
-    });
-  }
-})();
 </script>
 </body>
 </html>
+
 
 
 
