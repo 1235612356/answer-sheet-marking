@@ -626,9 +626,13 @@
       <canvas id="overlayCanvas"></canvas>
     </div>
 
-    <h2 style="margin-top: 12px;">批阅后答题卡预览</h2>
-    <div class="small">每个答题区域右上角会显示包含的题号及对应得分/满分，便于整体查看与下载归档。</div>
-    <img id="gradedSheetPreview" alt="批阅后答题卡预览" />
+<div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+  <select id="gradedModeSelect" style="padding:3px 6px; font-size:11px;">
+    <option value="sheet">带背景</option>
+    <option value="scores">仅评分</option>
+  </select>
+  <img id="gradedSheetPreview" alt="批阅后答题卡预览" style="border:1px solid #ddd;"/>
+</div>
 
     <div class="panel-header" style="margin-top: 14px;">
       <h2>运行日志</h2>
@@ -769,6 +773,7 @@
   let currentQuestionList = [];
   let selectedCardElement = null;
   let gradedSheetDataUrls = [];
+  let gradedScoreOnlyDataUrls = [];
   let currentReferenceText = '';
   let areaImagesMap = new Map(); // 用于存储旧格式的区域图片 id -> image
 
@@ -1534,6 +1539,7 @@ ${referenceText}
       renderGradingResult(gradingResult);
       downloadJsonButton.disabled = false;
       await generateGradedAnswerSheets();
+      downloadGradedSheetButton.disabled = false;
       log('\n全部批阅完成。');
     } catch (err) {
       console.error(err);
@@ -1546,125 +1552,204 @@ ${referenceText}
 
   // 生成批阅后答题卡
   async function generateGradedAnswerSheets() {
+    // helper: rounded rect
+    function roundRect(ctxx, x, y, w, h, r, fill, stroke) {
+      if (typeof r === 'undefined') r = 5;
+      if (r > w / 2) r = w / 2;
+      if (r > h / 2) r = h / 2;
+      ctxx.beginPath();
+      ctxx.moveTo(x + r, y);
+      ctxx.arcTo(x + w, y, x + w, y + h, r);
+      ctxx.arcTo(x + w, y + h, x, y + h, r);
+      ctxx.arcTo(x, y + h, x, y, r);
+      ctxx.arcTo(x, y, x + w, y, r);
+      ctxx.closePath();
+      if (fill) ctxx.fill();
+      if (stroke) ctxx.stroke();
+    }
+
     try {
       gradedSheetDataUrls = [];
+      gradedScoreOnlyDataUrls = [];
       if (gradedSheetPreview) gradedSheetPreview.src = '';
 
       if (!gradingResult) return;
 
       const items = gradingResult.grading.items || [];
-      
+
       // 兼容旧格式和新格式
       let sheets = [];
       if (gradingResult.answer_sheets) {
-        // 新格式
         sheets = gradingResult.answer_sheets;
       } else if (gradingResult.answer_sheet) {
-        // 旧格式
         sheets = [{
           original: gradingResult.answer_sheet.original_image,
           aligned: gradingResult.answer_sheet.aligned_image
         }];
       }
-      
+
+      // 按 area_id 聚合 items，便于在每个区域右侧绘制该区域的小题评分列表
+      const areaMap = new Map();
+      for (const it of items) {
+        if (it.sheet_index !== undefined && it.sheet_index !== undefined) {
+          // 保持原有 sheet_index 使用（后面按 sheet 划分时会以 item.sheet_index 为准）
+        }
+        const key = it.area_id;
+        if (!areaMap.has(key)) areaMap.set(key, []);
+        areaMap.get(key).push(it);
+      }
+
+      // 全局排序所有题目，与 renderGradingResult 保持一致
+      const sortedItems = [...items].sort((a, b) => {
+        const na = parseInt(a.question_number, 10);
+        const nb = parseInt(b.question_number, 10);
+        if (!isNaN(na) && !isNaN(nb)) {
+          return na - nb;
+        }
+        return String(a.question_number).localeCompare(String(b.question_number), 'zh-CN');
+      });
+
       for (let sheetIdx = 0; sheetIdx < sheets.length; sheetIdx++) {
         const sheet = sheets[sheetIdx];
         const baseUrl = sheet.aligned || sheet.original;
         if (!baseUrl) continue;
 
-        const img = await loadImage(baseUrl);
+        const img = baseUrl ? await loadImage(baseUrl) : null;
+        const width = img ? img.naturalWidth : 2480;
+        const height = img ? img.naturalHeight : 3508;
+
         const c = document.createElement('canvas');
-        c.width = img.naturalWidth;
-        c.height = img.naturalHeight;
+        c.width = width;
+        c.height = height;
         const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        if (img) ctx.drawImage(img, 0, 0);
 
-        const areaMap = new Map();
-        for (const it of items) {
-          if (it.sheet_index !== undefined && it.sheet_index !== sheetIdx) continue;
-          if (it.sheet_index === undefined && sheetIdx !== 0) continue; // 旧格式只有一张卡
-          const key = it.area_id;
-          if (!areaMap.has(key)) areaMap.set(key, []);
-          areaMap.get(key).push(it);
-        }
+        const cs = document.createElement('canvas');
+        cs.width = width;
+        cs.height = height;
+        const ctxs = cs.getContext('2d');
+        ctxs.fillStyle = '#ffffff';
+        ctxs.fillRect(0, 0, cs.width, cs.height);
 
+        const padding = 8;
+        const lineHeight = 26;
+        const boxGap = 6;
         ctx.font = '24px system-ui';
         ctx.textBaseline = 'top';
+        ctxs.font = ctx.font;
+        ctxs.textBaseline = 'top';
 
+        const itemAreaCoordsMap = new Map();
         for (const [areaId, areaItems] of areaMap) {
-          const area = QUESTION_AREAS.find(a => a.id === areaId);
-          if (!area) continue;
-
-          const lines = areaItems.map(it => `${it.question_number}:${it.score}/${it.max_score}`);
-
-          const padding = 6;
-          const lineHeight = 26;
-          let maxWidth = 0;
-          for (const line of lines) {
-            const w = ctx.measureText(line).width;
-            if (w > maxWidth) maxWidth = w;
+          let areaCoords = null;
+          if (gradingResult.answer_sheets && gradingResult.answer_sheets[sheetIdx] && gradingResult.answer_sheets[sheetIdx].areas) {
+            const areaDef = gradingResult.answer_sheets[sheetIdx].areas.find(a => a.id === areaId || String(a.id) === String(areaId));
+            if (areaDef && areaDef.coords) {
+              areaCoords = areaDef.coords;
+            } else if (areaDef && areaDef.x1 !== undefined) {
+              areaCoords = [areaDef.x1, areaDef.y1, areaDef.x2, areaDef.y2];
+            }
           }
-          const boxWidth = maxWidth + padding * 2;
-          const boxHeight = lineHeight * lines.length + padding * 2;
-
-          const x = area.x2 - boxWidth - 4;
-          const y = area.y1 + 4;
-
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.strokeStyle = 'rgba(15,23,42,0.4)';
-          ctx.lineWidth = 2;
-
-          if (ctx.roundRect) {
-            ctx.beginPath();
-            ctx.roundRect(x, y, boxWidth, boxHeight, 6);
-            ctx.fill();
-            ctx.stroke();
-          } else {
-            ctx.fillRect(x, y, boxWidth, boxHeight);
-            ctx.strokeRect(x, y, boxWidth, boxHeight);
+          if (!areaCoords) {
+            const itemWithCoords = areaItems.find(it => it.area_coords && it.area_coords.length === 4);
+            if (itemWithCoords) areaCoords = itemWithCoords.area_coords;
           }
-
-          ctx.fillStyle = '#111827';
-          for (let i = 0; i < lines.length; i++) {
-            ctx.fillText(lines[i], x + padding, y + padding + i * lineHeight);
+          if (!areaCoords && typeof QUESTION_AREAS !== 'undefined') {
+            const q = QUESTION_AREAS.find(a => String(a.id) === String(areaId));
+            if (q && q.x1 !== undefined) areaCoords = [q.x1, q.y1, q.x2, q.y2];
+          }
+          if (areaCoords) {
+            for (const item of areaItems) {
+              itemAreaCoordsMap.set(item, areaCoords);
+            }
           }
         }
 
-        const sheetItems = items.filter(it => {
-          if (it.sheet_index !== undefined) return it.sheet_index === sheetIdx;
-          return sheetIdx === 0; // 旧格式
-        });
-        const sheetScore = sheetItems.reduce((s, it) => s + (it.score || 0), 0);
-        
-        ctx.font = 'bold 60px system-ui';
-        ctx.fillStyle = '#dc2626';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        
-        const totalText = `总分: ${sheetScore.toFixed(1)}`;
-        const textWidth = ctx.measureText(totalText).width;
-        const padding = 20;
-        
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(c.width - textWidth - padding * 2, padding, textWidth + padding * 2, 80);
-        
-        ctx.fillStyle = '#dc2626';
-        ctx.fillText(totalText, c.width - padding, padding + 10);
+        let currentY = 10;
 
-        const dataUrl = c.toDataURL('image/jpeg', 0.9);
-        gradedSheetDataUrls.push(dataUrl);
+        for (const item of sortedItems) {
+          const areaCoords = itemAreaCoordsMap.get(item);
+          if (!areaCoords) continue;
+
+          const line = `${item.question_number}:${item.score}/${item.max_score}`;
+
+          const measureCtx = ctx;
+          const lineWidth = Math.ceil(measureCtx.measureText(line).width + padding * 2);
+          const lineHeightBox = lineHeight + padding * 2;
+
+          const tx = Math.round((c.width - lineWidth) / 2);
+          const ty = currentY;
+
+          currentY += lineHeightBox + boxGap;
+
+          const itemScore = Number(item.score) || 0;
+          const itemMax = Number(item.max_score) || 1;
+          const fillColor = getScoreColor(itemScore, itemMax);
+
+          ctx.save();
+          ctx.fillStyle = fillColor;
+          ctx.globalAlpha = 0.15;
+          roundRect(ctx, tx, ty, lineWidth, lineHeightBox, 6, true, false);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = fillColor;
+          ctx.lineWidth = 2;
+          roundRect(ctx, tx + 1, ty + 1, lineWidth - 2, lineHeightBox - 2, 6, false, true);
+          ctx.fillStyle = '#0b1220';
+          ctx.font = '24px system-ui';
+          ctx.fillText(line, tx + padding, ty + padding);
+          ctx.restore();
+
+          ctxs.save();
+          ctxs.fillStyle = fillColor;
+          ctxs.globalAlpha = 0.12;
+          roundRect(ctxs, tx, ty, lineWidth, lineHeightBox, 6, true, false);
+          ctxs.globalAlpha = 1;
+          ctxs.strokeStyle = fillColor;
+          ctxs.lineWidth = 2;
+          roundRect(ctxs, tx + 1, ty + 1, lineWidth - 2, lineHeightBox - 2, 6, false, true);
+          ctxs.fillStyle = '#0b1220';
+          ctxs.font = '24px system-ui';
+          ctxs.fillText(line, tx + padding, ty + padding);
+          ctxs.restore();
+        }
+
+        // 导出 dataURL
+        gradedSheetDataUrls.push(c.toDataURL('image/jpeg', 0.9));
+        gradedScoreOnlyDataUrls.push(cs.toDataURL('image/jpeg', 0.9));
       }
 
-      if (gradedSheetDataUrls.length > 0 && gradedSheetPreview) {
-        gradedSheetPreview.src = gradedSheetDataUrls[0];
+      // 默认在预览中显示第一张（或空）
+      const modeSelect = document.getElementById('gradedModeSelect');
+      if (modeSelect) {
+        const sel = modeSelect.value || 'sheet';
+        if (sel === 'scores' && gradedScoreOnlyDataUrls[0]) {
+          gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+        } else if (gradedSheetDataUrls[0]) {
+          gradedSheetPreview.src = gradedSheetDataUrls[0];
+        } else {
+          gradedSheetPreview.removeAttribute('src');
+        }
+      } else {
+        if (gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
       }
-      
-      downloadGradedSheetButton.disabled = gradedSheetDataUrls.length === 0;
-      log('已生成批阅后答题卡预览。');
-    } catch (e) {
-      console.error(e);
-      log('生成批阅后答题卡失败：' + e.message);
+    } catch (err) {
+      console.error('生成批阅后答题卡失败:', err);
     }
+  }
+
+  // 切换预览模式（带背景 / 仅评分）
+  const gradedModeSelectEl = document.getElementById('gradedModeSelect');
+  if (gradedModeSelectEl) {
+    gradedModeSelectEl.addEventListener('change', () => {
+      const v = gradedModeSelectEl.value;
+      if (v === 'scores') {
+        if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+        else if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
+      } else {
+        if (gradedSheetDataUrls && gradedSheetDataUrls[0]) gradedSheetPreview.src = gradedSheetDataUrls[0];
+        else if (gradedScoreOnlyDataUrls && gradedScoreOnlyDataUrls[0]) gradedSheetPreview.src = gradedScoreOnlyDataUrls[0];
+      }
+    });
   }
 
   // 更新总分进度条
@@ -2079,5 +2164,3 @@ ${referenceText}
 </script>
 </body>
 </html>
-
-
