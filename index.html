@@ -1713,6 +1713,57 @@ ${referenceText}
           ctxs.restore();
         }
 
+        // 在右上方绘制总分信息
+        const totalScore = sortedItems.reduce((s, it) => s + (Number(it.score) || 0), 0);
+        const totalMax = sortedItems.reduce((s, it) => s + (Number(it.max_score) || 0), 0);
+        const percentage = totalMax > 0 ? (totalScore / totalMax * 100) : 0;
+        const scoreStr = totalScore.toFixed(1);
+        const maxStr = totalMax.toFixed(1);
+        const percentStr = `(${percentage.toFixed(1)}%)`;
+
+        ctx.save();
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#dc2626';
+        const scoreMargin = 20;
+        
+        // 绘制百分比（大字体）
+        ctx.font = 'bold 56px system-ui';
+        ctx.fillText(percentStr, c.width - scoreMargin, scoreMargin);
+        const percentWidth = ctx.measureText(percentStr).width;
+        
+        // 绘制总分（小字体）
+        ctx.font = 'bold 32px system-ui';
+        const totalText = `/${maxStr}`;
+        ctx.fillText(totalText, c.width - scoreMargin - percentWidth - 15, scoreMargin + 10);
+        const totalWidth = ctx.measureText(totalText).width;
+        
+        // 绘制得分（大字体）
+        ctx.font = 'bold 56px system-ui';
+        ctx.fillText(scoreStr, c.width - scoreMargin - percentWidth - totalWidth - 15, scoreMargin);
+        ctx.restore();
+
+        ctxs.save();
+        ctxs.textAlign = 'right';
+        ctxs.textBaseline = 'top';
+        ctxs.fillStyle = '#dc2626';
+        
+        // 绘制百分比（大字体）
+        ctxs.font = 'bold 56px system-ui';
+        ctxs.fillText(percentStr, cs.width - scoreMargin, scoreMargin);
+        const percentWidth2 = ctxs.measureText(percentStr).width;
+        
+        // 绘制总分（小字体）
+        ctxs.font = 'bold 32px system-ui';
+        const totalText2 = `/${maxStr}`;
+        ctxs.fillText(totalText2, cs.width - scoreMargin - percentWidth2 - 15, scoreMargin + 10);
+        const totalWidth2 = ctxs.measureText(totalText2).width;
+        
+        // 绘制得分（大字体）
+        ctxs.font = 'bold 56px system-ui';
+        ctxs.fillText(scoreStr, cs.width - scoreMargin - percentWidth2 - totalWidth2 - 15, scoreMargin);
+        ctxs.restore();
+
         // 导出 dataURL
         gradedSheetDataUrls.push(c.toDataURL('image/jpeg', 0.9));
         gradedScoreOnlyDataUrls.push(cs.toDataURL('image/jpeg', 0.9));
