@@ -1731,18 +1731,18 @@ ${referenceText}
         
         // 绘制百分比（大字体）
         ctx.font = 'bold 56px system-ui';
-        ctx.fillText(percentStr, c.width - scoreMargin, scoreMargin);
+        ctx.fillText(percentStr, c.width - 230 - scoreMargin, scoreMargin);
         const percentWidth = ctx.measureText(percentStr).width;
         
         // 绘制总分（小字体）
         ctx.font = 'bold 32px system-ui';
         const totalText = `/${maxStr}`;
-        ctx.fillText(totalText, c.width - scoreMargin - percentWidth - 15, scoreMargin + 10);
+        ctx.fillText(totalText, c.width - 230 - scoreMargin - percentWidth - 15, scoreMargin + 10);
         const totalWidth = ctx.measureText(totalText).width;
         
         // 绘制得分（大字体）
         ctx.font = 'bold 56px system-ui';
-        ctx.fillText(scoreStr, c.width - scoreMargin - percentWidth - totalWidth - 15, scoreMargin);
+        ctx.fillText(scoreStr, c.width - 230 - scoreMargin - percentWidth - totalWidth - 15, scoreMargin);
         ctx.restore();
 
         ctxs.save();
@@ -1752,18 +1752,18 @@ ${referenceText}
         
         // 绘制百分比（大字体）
         ctxs.font = 'bold 56px system-ui';
-        ctxs.fillText(percentStr, cs.width - scoreMargin, scoreMargin);
+        ctxs.fillText(percentStr, cs.width - 230 - scoreMargin, scoreMargin);
         const percentWidth2 = ctxs.measureText(percentStr).width;
         
         // 绘制总分（小字体）
         ctxs.font = 'bold 32px system-ui';
         const totalText2 = `/${maxStr}`;
-        ctxs.fillText(totalText2, cs.width - scoreMargin - percentWidth2 - 15, scoreMargin + 10);
+        ctxs.fillText(totalText2, cs.width - 230 - scoreMargin - percentWidth2 - 15, scoreMargin + 10);
         const totalWidth2 = ctxs.measureText(totalText2).width;
         
         // 绘制得分（大字体）
         ctxs.font = 'bold 56px system-ui';
-        ctxs.fillText(scoreStr, cs.width - 100 - scoreMargin - percentWidth2 - totalWidth2 - 15, scoreMargin);
+        ctxs.fillText(scoreStr, cs.width - 230 - scoreMargin - percentWidth2 - totalWidth2 - 15, scoreMargin);
         ctxs.restore();
 
         // 导出 dataURL
@@ -2218,3 +2218,4 @@ ${referenceText}
 </body>
 
 </html>
+
