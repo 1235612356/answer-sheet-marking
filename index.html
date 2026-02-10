@@ -1094,6 +1094,7 @@
 2. 对于选择题（包括单选题、多选题、编号选择题如"①②③"等）：
    - 请识别题号、学生答案、标准答案、满分，评分由系统自动完成
    - 将 question_type 设为 "choice"
+   - 将小题分开
 3. 对于主观题：
    - 踩点给分，答对要点即给分
    - 不要求答案完全一致，意思对即可
@@ -1142,6 +1143,7 @@ ${answerText}
 2. 对于选择题（包括单选题、多选题、编号选择题如"①②③"等）：
    - 请识别题号、学生答案、标准答案、满分，评分由系统自动完成
    - 将 question_type 设为 "choice"
+   - 将小题分开
 3. 对于主观题：
    - 踩点给分，答对要点即给分
    - 不要求答案完全一致，意思对即可
@@ -1761,7 +1763,7 @@ ${referenceText}
         
         // 绘制得分（大字体）
         ctxs.font = 'bold 56px system-ui';
-        ctxs.fillText(scoreStr, cs.width - scoreMargin - percentWidth2 - totalWidth2 - 15, scoreMargin);
+        ctxs.fillText(scoreStr, cs.width - 100 - scoreMargin - percentWidth2 - totalWidth2 - 15, scoreMargin);
         ctxs.restore();
 
         // 导出 dataURL
@@ -2214,4 +2216,5 @@ ${referenceText}
   });
 </script>
 </body>
+
 </html>
